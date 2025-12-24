@@ -11,7 +11,7 @@ from .config import AgentConfig
 from .generate import draft_response
 from .ingest import ingest_knowledge_base
 from .index import DEFAULT_MODEL, build_index
-from .retrieve import retrieve_chunks, retrieve_snippets
+from .retrieve import RetrievedChunk, retrieve_chunks
 from .seo_rules import apply_keywords
 from .validate import check_compliance
 
@@ -71,6 +71,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--limit", type=int, default=3, help="Limit the number of retrieved snippets in the response"
     )
 
+    write_parser = subparsers.add_parser("write", help="Generate a Markdown article from the KB")
+    write_parser.add_argument("--config", type=Path, help="Path to a config.json file")
+    write_parser.add_argument("--topic", type=str, required=True, help="Article topic to write about")
+    write_parser.add_argument(
+        "--limit", type=int, default=5, help="Number of retrieved snippets to ground the article"
+    )
+
     # Support legacy invocation without a subcommand.
     parser.add_argument("--config", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--query", type=str, help=argparse.SUPPRESS)
@@ -108,12 +115,17 @@ def run(args: argparse.Namespace) -> str:
         results = retrieve_chunks(index_dir=index_dir, query=args.query, top_k=args.topk)
         return json.dumps([chunk.to_dict() for chunk in results], ensure_ascii=False, indent=2)
 
-    snippets: List[str] = []
+    topic: str | None = None
+    if args.command == "write":
+        topic = args.topic
+    else:
+        topic = getattr(args, "query", None)
+
+    chunks: List[RetrievedChunk] = []
     response = "No query provided."
-    query = getattr(args, "query", None)
-    if query:
-        snippets = retrieve_snippets(index_dir, query, limit=args.limit)
-        response = draft_response(query, snippets)
+    if topic:
+        chunks = retrieve_chunks(index_dir=index_dir, query=topic, top_k=args.limit)
+        response = draft_response(topic, chunks)
     if getattr(args, "apply_seo", False):
         response = apply_keywords(response)
     warnings = check_compliance(response)
