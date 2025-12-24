@@ -8,12 +8,12 @@ from pathlib import Path
 from typing import List
 
 from .config import AgentConfig
-from .generate import draft_response
+from .generate import draft_response, generate_article
 from .ingest import ingest_knowledge_base
 from .index import DEFAULT_MODEL, build_index
 from .retrieve import RetrievedChunk, retrieve_chunks
-from .seo_rules import apply_keywords
-from .validate import check_compliance
+from .seo_rules import apply_seo_rules
+from .validate import check_compliance, validate_or_raise
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -77,6 +77,13 @@ def build_parser() -> argparse.ArgumentParser:
     write_parser.add_argument(
         "--limit", type=int, default=5, help="Number of retrieved snippets to ground the article"
     )
+    write_parser.add_argument("--keyword", type=str, help="Optional SEO keyword to emphasize")
+    write_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("out.md"),
+        help="Destination file for the generated Markdown article",
+    )
 
     # Support legacy invocation without a subcommand.
     parser.add_argument("--config", type=Path, help=argparse.SUPPRESS)
@@ -126,13 +133,34 @@ def run(args: argparse.Namespace) -> str:
     if topic:
         chunks = retrieve_chunks(index_dir=index_dir, query=topic, top_k=args.limit)
         response = draft_response(topic, chunks)
+
     if getattr(args, "apply_seo", False):
-        response = apply_keywords(response)
+        response = apply_seo_rules(response)
+
+    if args.command == "write":
+        response = _write_pipeline(
+            topic=topic or "",
+            chunks=chunks,
+            keyword=getattr(args, "keyword", None),
+            output_path=getattr(args, "output", Path("out.md")),
+        )
+        return response
+
     warnings = check_compliance(response)
     if warnings:
         warning_text = "\n".join(f"Warning: {warning}" for warning in warnings)
         response = f"{response}\n\n{warning_text}"
     return response
+
+
+def _write_pipeline(topic: str, chunks: List[RetrievedChunk], keyword: str | None, output_path: Path) -> str:
+    """Retrieve -> generate -> SEO rules -> validate -> save pipeline for articles."""
+    article = generate_article(topic, chunks)
+    article = apply_seo_rules(article, keyword=keyword)
+    validate_or_raise(article)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(article, encoding="utf-8")
+    return f"Wrote article to {output_path.resolve()}"
 
 
 def main() -> None:
