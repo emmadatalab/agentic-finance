@@ -8,8 +8,8 @@ from typing import List
 
 from .config import AgentConfig
 from .generate import draft_response
-from .ingest import discover_documents, ingest_knowledge_base, load_documents
-from .index import build_index
+from .ingest import ingest_knowledge_base
+from .index import DEFAULT_MODEL, build_index
 from .retrieve import retrieve_snippets
 from .seo_rules import apply_keywords
 from .validate import check_compliance
@@ -34,6 +34,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Destination JSONL file for processed documents",
     )
 
+    index_parser = subparsers.add_parser("index", help="Build a FAISS index from processed KB JSONL")
+    index_parser.add_argument(
+        "--input",
+        type=Path,
+        default=Path("data/kb_processed/kb.jsonl"),
+        help="Path to processed kb.jsonl file",
+    )
+    index_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("data/index"),
+        help="Directory where the FAISS index and metadata should be written",
+    )
+    index_parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="SentenceTransformer model name to use for embeddings (defaults to all-MiniLM-L6-v2)",
+    )
+    index_parser.add_argument("--chunk-size", type=int, default=1000, help="Chunk size in characters")
+    index_parser.add_argument("--chunk-overlap", type=int, default=200, help="Chunk overlap in characters")
+    index_parser.add_argument("--batch-size", type=int, default=32, help="Embedding batch size")
+
     query_parser = subparsers.add_parser("query", help="Run the end-to-end query workflow")
     query_parser.add_argument("--config", type=Path, help="Path to a config.json file")
     query_parser.add_argument("--query", type=str, help="User question to answer")
@@ -56,15 +79,29 @@ def run(args: argparse.Namespace) -> str:
         documents = ingest_knowledge_base(args.raw_dir, args.output)
         return f"Ingested {len(documents)} documents into {args.output}"
 
+    if args.command == "index":
+        index_path = build_index(
+            kb_path=args.input,
+            index_dir=args.output,
+            model_name=args.model or DEFAULT_MODEL,
+            chunk_size=args.chunk_size,
+            chunk_overlap=args.chunk_overlap,
+            batch_size=args.batch_size,
+        )
+        return f"Built index at {index_path}"
+
     config_path = getattr(args, "config", None)
     config = AgentConfig.load(config_path)
-    documents = load_documents(discover_documents(config.knowledge_base_path))
-    index_path = build_index(documents, config.index_path)
+    kb_path = config.knowledge_base_path
+    index_dir = config.index_path
+    index_path = index_dir / "index.faiss"
+    if not index_path.exists():
+        build_index(kb_path=kb_path, index_dir=index_dir)
     snippets: List[str] = []
     response = "No query provided."
     query = getattr(args, "query", None)
     if query:
-        snippets = retrieve_snippets(index_path, query, limit=args.limit)
+        snippets = retrieve_snippets(index_dir, query, limit=args.limit)
         response = draft_response(query, snippets)
     if getattr(args, "apply_seo", False):
         response = apply_keywords(response)
