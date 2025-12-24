@@ -18,6 +18,14 @@ You can provide a query and optional SEO keyword injection:
 python -m agent.cli --query "What are diversification benefits?" --apply-seo
 ```
 
+To produce a Markdown article grounded only in retrieved knowledge base snippets, use the writing helper:
+
+```bash
+python -m agent.cli write --topic "Diversification benefits" --limit 5
+```
+
+The generated article cites every claim with `[doc_id — source_path]` and returns `Not enough evidence in KB` when no supporting context is available.
+
 To inspect the top matching knowledge base chunks (including document IDs and source paths), run the retrieval utility:
 
 ```bash
