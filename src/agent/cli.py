@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from typing import List
 
@@ -10,7 +11,7 @@ from .config import AgentConfig
 from .generate import draft_response
 from .ingest import ingest_knowledge_base
 from .index import DEFAULT_MODEL, build_index
-from .retrieve import retrieve_snippets
+from .retrieve import retrieve_chunks, retrieve_snippets
 from .seo_rules import apply_keywords
 from .validate import check_compliance
 
@@ -57,6 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
     index_parser.add_argument("--chunk-overlap", type=int, default=200, help="Chunk overlap in characters")
     index_parser.add_argument("--batch-size", type=int, default=32, help="Embedding batch size")
 
+    retrieve_parser = subparsers.add_parser("retrieve", help="Retrieve chunks from the FAISS index")
+    retrieve_parser.add_argument("--config", type=Path, help="Path to a config.json file")
+    retrieve_parser.add_argument("--query", type=str, required=True, help="Query string to search for")
+    retrieve_parser.add_argument("--topk", type=int, default=3, help="Number of chunks to return")
+
     query_parser = subparsers.add_parser("query", help="Run the end-to-end query workflow")
     query_parser.add_argument("--config", type=Path, help="Path to a config.json file")
     query_parser.add_argument("--query", type=str, help="User question to answer")
@@ -97,6 +103,11 @@ def run(args: argparse.Namespace) -> str:
     index_path = index_dir / "index.faiss"
     if not index_path.exists():
         build_index(kb_path=kb_path, index_dir=index_dir)
+
+    if args.command == "retrieve":
+        results = retrieve_chunks(index_dir=index_dir, query=args.query, top_k=args.topk)
+        return json.dumps([chunk.to_dict() for chunk in results], ensure_ascii=False, indent=2)
+
     snippets: List[str] = []
     response = "No query provided."
     query = getattr(args, "query", None)
