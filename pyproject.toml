@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "KB-grounded financial content agent skeleton"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "faiss-cpu>=1.8.0",
+    "sentence-transformers>=3.0.0",
+]
 
 [project.scripts]
 agent-cli = "agent.cli:main"

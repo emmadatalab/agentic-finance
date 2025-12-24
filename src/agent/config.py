@@ -14,7 +14,7 @@ DEFAULT_CONFIG_PATH = Path(os.getenv("AGENT_CONFIG_PATH", "config.json"))
 class AgentConfig:
     """Simple configuration container."""
 
-    knowledge_base_path: Path = Path("data/knowledge_base")
+    knowledge_base_path: Path = Path("data/kb_processed/kb.jsonl")
     index_path: Path = Path("data/index")
     model_name: str = "gpt-placeholder"
     extra: Dict[str, Any] = field(default_factory=dict)
