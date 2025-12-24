@@ -18,6 +18,12 @@ You can provide a query and optional SEO keyword injection:
 python -m agent.cli --query "What are diversification benefits?" --apply-seo
 ```
 
+To inspect the top matching knowledge base chunks (including document IDs and source paths), run the retrieval utility:
+
+```bash
+python -m agent.cli retrieve --query "What are diversification benefits?" --topk 8
+```
+
 Configuration defaults are read from `config.json` when present. The processed knowledge base is expected at `data/kb_processed/kb.jsonl`, and the FAISS index plus metadata are written to `data/index`.
 
 ## Ingesting raw knowledge base files
